@@ -7,13 +7,8 @@ extern 		sscanf
 section 	.data
 	msgSal				db	"numero en base %hi es: %s",10,0
 	msjError			db 	"combinacion de base y numero incorrecto",10,0
-	borrar 				db  "%s",0
-	borrar2 			db 	"%c",10,0
-	borrar3 			db 	"soy igual",10,0
-	borrar4	  			db  "numero convertido: %hi",10,0
-	borrar5 			db 	"numero a hexa: %hi",10,0
-
-	msj 				db 	"el numero ingresado en base 10 es: %hi",10,0
+	msjCadVacia			db 	"Entrada no valida (caracter vacio)",10,0
+	;msj 				db 	"el numero ingresado en base 10 es: %hi",10,0
 	msjDigitos 			db 	"La sumatoria de digitos es: %hi",10,0
 	mensajeInicial 		db 	"ingrese un numero: ",0
 	mensajeBase 		db 	"ingrese Base del numero anterior: ",0
@@ -25,7 +20,6 @@ section 	.data
 	vecLetras  			db 	"A   ",0,"B   ",0,"C   ",0,"D   ",0,"E   ",0,"F   ",0
 
 section 	.bss
-	var 				resq	1
 
 	buffer 				resb 	50
 	buffer2 			resb  	50
@@ -75,12 +69,17 @@ entradaBase:
 	
 validacionBase:
 	call 	validarBase
+	
 	cmp 	byte[baseInicioValida],'N'
 	je		msjbaseInvalida
-	
-	call 	conversion
 
-	call 	sumaDigitos
+	cmp 	word[longitudBuffer],-1		;valido entrada vacia	
+	je 		msjCadenaVacia
+	
+	jmp 	conversion
+
+suma:							;jmp en conversion y sumaDigitos porque mostraba varias veces resultado final
+	jmp 	sumaDigitos
 	
 finPrograma:
 	ret 
@@ -96,6 +95,7 @@ validarEntrada:
 	mov 	byte[entradaAlphNum],'N'
 	mov     rax,0
 	mov 	rbx,0
+
 iterBuffer:
 	mov 	dl,byte[buffer + ebx]
     cmp     dl,0
@@ -113,7 +113,8 @@ iterBuffer:
 	add		rsp,[plusRsp]	
 	
 	cmp 	rax,0
-	je 		noNumerico
+	jle 	noNumerico
+
 siguienteBuffer:
 	inc     ebx
     jmp     iterBuffer
@@ -128,7 +129,7 @@ convBuffer:
 	call	checkAlign      
 	sub		rsp,[plusRsp]   
     call	sscanf
-	add		rsp,[plusRsp]				
+	add		rsp,[plusRsp]				; ver si puedo validar cuando entra mas parametros
 	
 
 invalido:
@@ -138,6 +139,13 @@ noNumerico:
 	mov 	byte[entradaAlphNum],'S'
 	jmp 	siguienteBuffer
 
+
+msjCadenaVacia:
+	mov		word[baseInicio],0
+	sub 	rax,rax
+	mov 	rdi,msjCadVacia
+	call 	printf
+	jmp 	entradaNumero
 
 validarBase:
 	mov 	byte[baseInicioValida],'N'
@@ -201,11 +209,13 @@ sigConversion:
 
 	cmp 	word[baseActual],-1
 	je 		finConversion
+
 base10:
 	cmp 	word[baseInicio],10
 	je 		deDecimalA
 	
 	jmp 	aDecimal	
+
 chequeo:
 	;a partir de aca ya tengo el numero en base 10, en contadorBase10
 	mov 	byte[entradaAlphNum],'N'
@@ -221,7 +231,7 @@ aumentar:
 	jmp 	sigConversion
 
 finConversion:
-	ret
+	jmp 	suma
 
 ;*****************************************
 
@@ -230,14 +240,12 @@ deDecimalA:
 	cmp 	byte[entradaAlphNum],'S'
 	je 		mensajeError
 	
-	; cmp 	word[numEntrada],' '		;ARREGLAR ESTO ENTRADA VACIA !!
-	; je 		mensajeError
-
 	mov 	qword[contador],1
-	mov 	ax,word[numEntrada] ;numero en base decimal  
+	mov 	ax,word[numEntrada] 		;numero en base decimal  
 	mov 	word[contadorBase10],ax
+
 sig:
-	mov 	cx,word[baseActual] ; base de destino
+	mov 	cx,word[baseActual] 		; base de destino
 	cmp 	ax,cx
 	jl 		finish
 
@@ -383,7 +391,7 @@ iguales:									; lo que hago aca es convertir la letra hexadecimal en numero
 	mov		r10w,word[vecNumHexa + r9d]
 	
 	cmp 	r10w,word[baseInicio]				;en r10w tengo el numero en decimal
-	jg 		mensajeError
+	jge 	mensajeError
 	
 	mov 	r12w,[longitudBuffer]
 	
@@ -416,11 +424,10 @@ seguirConv:
 	;resto en dx numero "partido por digito"
 	;***************************************************
 	cmp 	dx,word[baseInicio]
-	jg 		Error
+	jge 	Error
 
-
-	;***********************************************
 	jmp 	calcularPotencia	;resultado en contador2
+
 multi:
 	imul 	dx,word[contador2] ;resultado en dx
 	add 	word[contadorBase10],dx
@@ -442,7 +449,7 @@ calcularPotencia:
 
 	mov 	r11w,1 	
 	mov 	r14w,1 ; siempre 1
-	mov 	cx,r12w ; exponente word[exponente]
+	mov 	cx,r12w ; exponente 
 	inc 	cx
 
 	cmp 	cx,0
@@ -462,7 +469,7 @@ imprimir:
 
 terminar:
 	ret
-									
+										
 ;*****************************************************************
 sumaDigitos:
 	;inc 	word[contadorBase10]	;descomentar si es necesario, preguntar por limite 
@@ -498,7 +505,7 @@ finSumDigitos:
 	mov 	si,[sumDigits]
 	call 	printf
 
-	ret 
+	jmp 	finPrograma
 
 
 ;----------------------------------------
@@ -517,13 +524,13 @@ checkAlign:
 	mov		rdx,0
 
 	mov		rax,rsp		
-	add     rax,8		;para sumar lo q restó la CALL 
-	add		rax,32	;para sumar lo que restaron las PUSH
+	add     rax,8		 
+	add		rax,32	
 	
 	mov		rbx,16
-	idiv	rbx			;rdx:rax / 16   resto queda en RDX
+	idiv	rbx		
 
-	cmp     rdx,0		;Resto = 0?
+	cmp     rdx,0		
 	je		finCheckAlign
 
 	mov   qword[plusRsp],8
