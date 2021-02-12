@@ -131,7 +131,6 @@ convBuffer:
     call	sscanf
 	add		rsp,[plusRsp]				; ver si puedo validar cuando entra mas parametros
 	
-
 invalido:
 	ret
 
