@@ -5,50 +5,57 @@ extern 		gets
 extern 		sscanf
 
 section 	.data
-	msgSal				db	"numero en base %hi es: %s",10,0
+	msgSal				db	"numero en base %li es: %s",10,0
+	msgSalNeg			db 	"numero en base %li es: -%s",10,0
 	msjError			db 	"combinacion de base y numero incorrecto",10,0
 	msjCadVacia			db 	"Entrada no valida (caracter vacio)",10,0
-	;msj 				db 	"el numero ingresado en base 10 es: %hi",10,0
-	msjDigitos 			db 	"La sumatoria de digitos es: %hi",10,0
-	mensajeInicial 		db 	"ingrese un numero: ",0
+	msjDigitos 			db 	"La sumatoria de digitos es: %li",10,0
+	mensajeInicial 		db 	"ingrese un numero (letras en mayusculas): ",0
 	mensajeBase 		db 	"ingrese Base del numero anterior: ",0
-	formatoEntrada 		db 	"%hi",0
-	formatoBase 		db 	"%hi",0
+	formatoEntrada 		db 	"%li",0
+
 	msjBaseIncorrecta 	db 	"Por favor ingrese una base valida Ej: (2 ,4, 8, 10, 16)",10,0
-	vecBases 			dw 	2,4,8,10,16,-1
+	vecBases 			dw 	2,4,8,10,16
 	vecNumHexa			dw	10,11,12,13,14,15
 	vecLetras  			db 	"A   ",0,"B   ",0,"C   ",0,"D   ",0,"E   ",0,"F   ",0
+	borrar 				db 	"%li",10,0
+	borrar2 			db  "",10,0
+	
+
 
 section 	.bss
 
 	buffer 				resb 	50
 	buffer2 			resb  	50
 	buffer3 			resb  	50
+	bufferAux 			resb 	50
 	numeroAConvertir	resw 	1
-	contadorBase10		resw 	1
+	contadorBase10		resq 	1
 	entradaAlphNum 		resb 	1
 	baseInicioValida 	resb 	1
+	numeroNegativo 		resb 	1
 	
-	numEntrada			resw	1
-	baseInicio 			resw	1
-	baseActual			resw 	1
+	numEntrada			resq	1
+	baseInicio 			resq	1
+	baseActual			resq 	1
 	plusRsp				resq	1  
 	contador 			resq  	1
-	contador2			resw 	1
+	contador2			resq 	1
+	contador3 			resw 	1
 	todoOk 				resb 	1
 
 	indice 				resw 	1
 	indice2 			resd 	1
 	base 				resb 	100
-	longitudBuffer		resw 	1
-	sumDigits 			resw 	1
+	longitudBuffer		resq 	1
+	sumDigits 			resq 	1
 
 
 section 	.text
 
 main:
 entradaNumero:
-	mov 	word[contadorBase10],0
+	mov 	qword[contadorBase10],0
 	sub 	rax,rax
 	mov 	rdi,mensajeInicial
 	call 	printf
@@ -65,26 +72,59 @@ entradaBase:
 	call 	gets	
 
 	call 	validarEntrada
-	dec 	word[longitudBuffer]
+	dec 	qword[longitudBuffer]
 	
+	cmp 	byte[numeroNegativo],'S'
+	jne 	validacionBase
+
+	;numero negativo
+	cmp 	byte[entradaAlphNum],'S'
+	jne 	cambioDeSigno
+
+	;en este punto mi buffer tiene un numero negativo y es conformado con una letra
+	call 	cambioDeBuffer
+	jmp 	validacionBase
+
+cambioDeSigno:	 	
+	neg 	qword[numEntrada]
+
 validacionBase:
 	call 	validarBase
 	
 	cmp 	byte[baseInicioValida],'N'
 	je		msjbaseInvalida
 
-	cmp 	word[longitudBuffer],-1		;valido entrada vacia	
+	cmp 	qword[longitudBuffer],-1		;valido entrada vacia	
 	je 		msjCadenaVacia
 	
 	jmp 	conversion
 
 suma:							;jmp en conversion y sumaDigitos porque mostraba varias veces resultado final
-	jmp 	sumaDigitos
+	call 	sumaDigitos
 	
 finPrograma:
 	ret 
 
-;*********************************************************
+
+cambioDeBuffer:
+	lea 	rsi,buffer + 1
+	lea 	rdi,bufferAux
+	mov 	rcx,[longitudBuffer]
+rep movsb
+		
+	mov 	rcx,[longitudBuffer]
+	lea 	rsi,bufferAux 
+	lea 	rdi,buffer
+
+rep movsb
+	mov 	rbx,[longitudBuffer]
+	mov 	byte[buffer + ebx],0
+
+	dec 	byte[longitudBuffer]
+	
+	ret
+
+
 msjbaseInvalida:
 	sub 	rax,rax
 	mov 	rdi,msjBaseIncorrecta
@@ -92,6 +132,7 @@ msjbaseInvalida:
 	jmp 	entradaBase
 
 validarEntrada:
+	mov 	byte[numeroNegativo],'N'
 	mov 	byte[entradaAlphNum],'N'
 	mov     rax,0
 	mov 	rbx,0
@@ -120,27 +161,35 @@ siguienteBuffer:
     jmp     iterBuffer
 
 convBuffer:
-	mov 	word[longitudBuffer],bx
+	mov 	qword[longitudBuffer],rbx
 	
 	mov 	rdi,buffer
-	mov 	rsi,formatoEntrada
+	mov 	rsi,formatoEntrada 	
 	mov 	rdx,numEntrada
 
 	call	checkAlign      
-	sub		rsp,[plusRsp]   
+	sub		rsp,[plusRsp]   ;convierte el buffer ,si es no numerico no lo convierte 
     call	sscanf
-	add		rsp,[plusRsp]				; ver si puedo validar cuando entra mas parametros
-	
+	add		rsp,[plusRsp]				
+
 invalido:
 	ret
 
 noNumerico:
+	cmp 	byte[buffer3],'-'
+	jne 	alphaNum
+	mov 	byte[numeroNegativo],'S'
+	jmp 	siguiente
+
+alphaNum:
 	mov 	byte[entradaAlphNum],'S'
+
+siguiente:
 	jmp 	siguienteBuffer
 
 
 msjCadenaVacia:
-	mov		word[baseInicio],0
+	mov		qword[baseInicio],0
 	sub 	rax,rax
 	mov 	rdi,msjCadVacia
 	call 	printf
@@ -150,7 +199,7 @@ validarBase:
 	mov 	byte[baseInicioValida],'N'
 	
 	mov 	rdi,buffer2
-	mov 	rsi,formatoBase
+	mov 	rsi,formatoEntrada
 	mov 	rdx,baseInicio
 
 	call	checkAlign      
@@ -171,8 +220,8 @@ validarBase:
 iteracion:
 	mov 	dx,[vecBases + ebx]
 
-	cmp 	dx,[baseInicio]
-	je 		validoInicio
+	cmp 	rdx,[baseInicio]
+	je 		valido
 
 proximaIteracion:
 	add		ebx,2
@@ -184,10 +233,10 @@ terminarIteracion:
 	ret 
 	
 
-validoInicio:
+valido:
 	mov 	byte[baseInicioValida],'S'
 	jmp 	proximaIteracion
-;******************************************
+
 
 mensajeError:
 	sub 	rax,rax
@@ -197,34 +246,41 @@ mensajeError:
 
 conversion:
 	;iterar por arreglo de bases 
+	mov 	word[contador3],0 	;contador para vector de bases 
+	mov 	rbx,0
 	mov 	rax,1
 	dec 	rax
 	imul 	ebx,eax,2
 
 sigConversion:
-	mov 	dx,[vecBases + ebx]
-	mov 	word[baseActual],dx
-	mov 	dword[indice2],ebx
-
-	cmp 	word[baseActual],-1
+	cmp 	word[contador3],5 		;indice a recorrido a vector de bases
 	je 		finConversion
 
-base10:
-	cmp 	word[baseInicio],10
+	mov 	dx,[vecBases + ebx]
+	mov 	qword[baseActual],rdx
+	mov 	dword[indice2],ebx		;indice2 para conservar contenido de ebx
+
+	cmp 	qword[baseInicio],10
 	je 		deDecimalA
 	
 	jmp 	aDecimal	
 
-chequeo:
+cargarNumero:
 	;a partir de aca ya tengo el numero en base 10, en contadorBase10
+	sub 	rax,rax
+	mov 	rdi,borrar2 	;espacio vacio para salida mas legible
+	call 	printf
+
 	mov 	byte[entradaAlphNum],'N'
-	mov 	word[baseInicio],10
+	mov 	qword[baseInicio],10
 
-	mov 	r15w,word[contadorBase10]
-	mov 	word[numEntrada],r15w
-	jmp 	base10
+	mov 	r15,qword[contadorBase10]
+	mov 	qword[numEntrada],r15
 
+	jmp 	conversion
+	
 aumentar:
+	inc 	word[contador3]
 	add 	dword[indice2],2
 	mov 	ebx,dword[indice2]
 	jmp 	sigConversion
@@ -232,138 +288,148 @@ aumentar:
 finConversion:
 	jmp 	suma
 
-;*****************************************
-
 
 deDecimalA:
+	mov 	word[indice],0 				;para reemplazar numero por letra hexa
 	cmp 	byte[entradaAlphNum],'S'
 	je 		mensajeError
 	
 	mov 	qword[contador],1
-	mov 	ax,word[numEntrada] 		;numero en base decimal  
-	mov 	word[contadorBase10],ax
-
+	mov 	rax,qword[numEntrada] 		;numero en base decimal  
+	mov 	qword[contadorBase10],rax
+	mov 	rcx,qword[baseActual] 		; base de destino
 sig:
-	mov 	cx,word[baseActual] 		; base de destino
-	cmp 	ax,cx
-	jl 		finish
 
-	xor 	dx,dx
-	idiv 	cx
+	cmp 	rax,rcx
+	jl 		final
 
-	push 	dx
-	mov 	bx,ax	
+	xor 	rdx,rdx
+	idiv 	rcx
+
+	push 	rdx
 	
-	mov 	ax,bx
 	inc  	qword[contador]
 	jmp		sig
 
-finish:
-	push 	ax		
+final:
+	push 	rax		
 	mov 	rcx,0
 
 prox:
 	cmp 	qword[contador],0
-	je 		fin
+	je 		salidaPantalla
 	
 	dec 	qword[contador]
-	pop 	bx
-	
+	pop 	rbx
 
-	cmp 	bx,9
+	cmp 	rbx,9
 	jg 		cambio
 
-	add 	bx,48
+	add 	rbx,48
 
 desplazamiento:
 	mov 	[base + rcx],bl
 	inc 	rcx
-
 	jmp 	prox
 	
 cambio:
-	mov 	r8w,bx
+	mov 	word[indice],0
+	mov 	r8,rbx
 
 	mov 	rax,1
 	dec 	rax
 	imul 	ebx,eax,2
 
 proxLetra:
+
 	mov 	dx,[vecNumHexa + ebx] 	
 	inc 	word[indice]
 	
-	cmp 	dx,r8w      
+	cmp 	rdx,r8      
 	je 		copiarLetra	
 	
 	add 	ebx,2
 	jmp 	proxLetra
 
 copiarLetra:
+	mov 	rdx,0
 	mov 	ax,word[indice]
-	dec 	ax
+	dec		ax
 	imul 	ebx,eax,5
 
 	mov 	dx,[vecLetras + ebx]
+
 	mov 	bx,dx
 	jmp 	desplazamiento
 
 
-fin:
+salidaPantalla:
 
+	sub 	rax,rax
 	mov 	word[base+rcx],0
 
+	cmp 	byte[numeroNegativo],'N'
+	je		posit
+	mov 	rdi,msgSalNeg
+	mov 	rsi,[baseActual]
+	mov 	rdx,base
+	call 	printf
+	jmp 	aumento
+
+posit:
 	sub 	rax,rax
 	mov 	rdi,msgSal
 	mov 	rsi,[baseActual]
 	mov 	rdx,base
 	call 	printf
-	
+
+aumento:
 	jmp 	aumentar
 
 ;**********************************************
 aDecimal:
+	
 	mov 	byte[todoOk],'S'
 	cmp 	byte[entradaAlphNum],'S'
 	je 		iterarNumero
 	
-	;a partir de aca se que es un numero 
-	mov 	r15w,word[numEntrada]
-	mov 	word[numeroAConvertir],r15w   
+	;a partir de aca se que es un numero   
 	call 	cambioBase
 	cmp 	byte[todoOk],'N'
 	je 		mensajeError
 
-	jmp		chequeo
+finCambioBase:
+	jmp		cargarNumero
 
 
 iterarNumero:
 	mov     rbx,0	;puntero a buffer
+
 sigCaracter:
+	mov 	rdx,0
 	mov 	r13,0	;puntero a vecLetras
 	mov 	r8,0 	;uso para reemplazar letra por numero / contador 
 	mov 	dl,byte[buffer + ebx]
    
 	cmp     dl,0
-    je      finCad
+    je      finCambioBase
 
 	jmp 	comprobarNumero
 	
 comprobarCadena:
 	;si llego aca es porque es una letra y no un numero
 	add 	dl,48
+
 sigEnCadena:
 	cmp 	r8w,6
 	je 		mensajeError
 	
 	cmp 	dl,byte[vecLetras + r13d]
-	je 		iguales
+	je 		caracteresIguales
 	add    	r13d,5
 	inc		r8w
     jmp     sigEnCadena
 
-
-finCad:
-	jmp 	chequeo
 	
 comprobarNumero:
 	sub 	dl,48
@@ -373,31 +439,30 @@ comprobarNumero:
 	cmp 	dl,9
 	jg 		comprobarCadena
 	
-	mov 	r12w,[longitudBuffer]
+	mov 	r12,[longitudBuffer]
 	call 	calcularPotencia
-	imul 	dx,word[contador2] ;resultado en dx
+	imul 	rdx,qword[contador2] ;resultado en dx
 
-	add 	word[contadorBase10],dx
+	add 	qword[contadorBase10],rdx
 
 	jmp 	incrementar
 
-	;********************************
 
-
-iguales:									; lo que hago aca es convertir la letra hexadecimal en numero
-											; y si es mayor a la base da error 
+caracteresIguales:									; lo que hago aca es convertir la letra hexadecimal en numero
+	mov 	r10,0											; y si es mayor a la base da error 
 	imul 	r9d,r8d,2
 	mov		r10w,word[vecNumHexa + r9d]
 	
-	cmp 	r10w,word[baseInicio]				;en r10w tengo el numero en decimal
+	cmp 	r10,qword[baseInicio]				;en r10w tengo el numero en decimal
 	jge 	mensajeError
 	
-	mov 	r12w,[longitudBuffer]
+	mov 	r12,[longitudBuffer]
 	
 	call 	calcularPotencia
-	imul 	r10w,word[contador2] ;resultado en dx
+	imul 	r10,qword[contador2] ;resultado en dx
 
-	add 	word[contadorBase10],r10w
+
+	add 	qword[contadorBase10],r10
 	jmp 	incrementar
 
 incrementar:
@@ -405,33 +470,39 @@ incrementar:
 	jmp 	sigCaracter
 
 
+
 cambioBase:
 	;dx:ax 
 	;resto dx
 	;cociente ax
 	;**************************************
-	mov 	r12w,0
-	mov 	ax,word[numeroAConvertir]
-	mov 	r13w,10
+	mov 	r12,0    ;para contar el exponente
+	mov 	rax,qword[numEntrada]
+	mov 	r13,10
 
 seguirConv:
-	cmp 	ax,0 ;si el cociente da 0 corta
+	cmp 	rax,0 ;si el cociente da 0 corta
 	je 		finConv
 
-	xor 	dx,dx
-	idiv	r13w
-	;resto en dx numero "partido por digito"
+	xor 	rdx,rdx
+	idiv	r13
+	;resto en rdx numero "partido por digito"
 	;***************************************************
-	cmp 	dx,word[baseInicio]
+	cmp 	rdx,qword[baseInicio]  ;si mi digito es mas grande que la base da error
 	jge 	Error
+	cmp 	rdx,0
+	je 		incremento
 
-	jmp 	calcularPotencia	;resultado en contador2
+	call 	calcularPotencia	;resultado en contador2
+	cmp 	byte[entradaAlphNum],'S'
+	je 		finConv
 
 multi:
-	imul 	dx,word[contador2] ;resultado en dx
-	add 	word[contadorBase10],dx
-	inc 	r12w
-	
+	imul 	rdx,qword[contador2] ;resultado en dx
+	add 	qword[contadorBase10],rdx
+
+incremento:
+	inc 	r12
 	jmp 	seguirConv
 
 Error:
@@ -442,29 +513,21 @@ finConv:
 
 
 calcularPotencia:
-	mov 	rcx,0
-	mov 	r11,0
-	mov 	word[contador2],1
+	
+	mov 	qword[contador2],1
 
-	mov 	r11w,1 	
-	mov 	r14w,1 ; siempre 1
-	mov 	cx,r12w ; exponente 
-	inc 	cx
-
-	cmp 	cx,0
-	jz 		imprimir
+	mov 	r11,1 	
+	mov 	r14,1 ; siempre 1
+	mov 	rcx,r12 ; exponente 
+	inc 	rcx
 pot:
-	imul 	r14w,r11w
-	mov 	word[contador2],r14w
-	mov 	r11w,word[baseInicio] 	
+	imul 	r14,r11
+	mov 	qword[contador2],r14
+	mov 	r11,qword[baseInicio] 	
 	loop 	pot
 
 imprimir:
-	dec 	word[longitudBuffer]
-
-	cmp 	byte[entradaAlphNum],'S'
-	je 		terminar
-	jmp 	multi
+	dec 	qword[longitudBuffer]
 
 terminar:
 	ret
@@ -474,37 +537,40 @@ sumaDigitos:
 	;inc 	word[contadorBase10]	;descomentar si es necesario, preguntar por limite 
 	mov 	rbx,0
 
-	mov 	word[sumDigits],0 			;inicializo acumulador
-	mov 	bx,1  						;inicia sumatoria en 1
+	mov 	qword[sumDigits],0 			;inicializo acumulador
+	cmp 	byte[numeroNegativo],'S'
+	je 		finSumDigitos
+
+	mov 	rbx,1  						;inicia sumatoria en 1
 	
 cargarProx:
-	cmp 	bx,word[contadorBase10] 	;contadorBase10 contiene el limite superior de la sumatoria
+	cmp 	rbx,qword[contadorBase10] 	;contadorBase10 contiene el limite superior de la sumatoria
 	jg 		finSumDigitos 	
 	
-	mov 	ax,bx		
-	mov 	r13w,10
+	mov 	rax,rbx		
+	mov 	r13,10
 partirNumero:
-	cmp 	ax,0
+	cmp 	rax,0
 	je 		finParticion
 
-	xor 	dx,dx
-	idiv	r13w
-	;resto en dx numero "partido por digito"
-	add 	word[sumDigits],dx
+	xor 	rdx,rdx
+	idiv	r13
+	;resto en rdx numero "partido por digito"
+	add 	qword[sumDigits],rdx
 
 	jmp 	partirNumero
 
 finParticion:
-	inc 	bx
+	inc 	rbx
 	jmp 	cargarProx
 
 finSumDigitos:
 	sub 	rax,rax
 	mov 	rdi,msjDigitos
-	mov 	si,[sumDigits]
+	mov 	rsi,[sumDigits]
 	call 	printf
 
-	jmp 	finPrograma
+	ret
 
 
 ;----------------------------------------
