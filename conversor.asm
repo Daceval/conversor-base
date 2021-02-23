@@ -18,8 +18,7 @@ section 	.data
 	vecBases 			dw 	2,4,8,10,16
 	vecNumHexa			dw	10,11,12,13,14,15
 	vecLetras  			db 	"A   ",0,"B   ",0,"C   ",0,"D   ",0,"E   ",0,"F   ",0
-	borrar 				db 	"%li",10,0
-	borrar2 			db  "",10,0
+	espacio 			db  "",10,0
 	
 
 
@@ -268,7 +267,7 @@ sigConversion:
 cargarNumero:
 	;a partir de aca ya tengo el numero en base 10, en contadorBase10
 	sub 	rax,rax
-	mov 	rdi,borrar2 	;espacio vacio para salida mas legible
+	mov 	rdi,espacio 	;espacio vacio para salida mas legible
 	call 	printf
 
 	mov 	byte[entradaAlphNum],'N'
